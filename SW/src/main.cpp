@@ -1,10 +1,12 @@
 #include <Arduino.h>
+#include <EEPROM.h>
 #include <HardwareSerial.h>
 #include "EasyNextionLibrary.h"
 #include "BluetoothA2DPSink.h"
 #include "BluetoothA2DPCommon.h"
+#include "version.h"
 
-#define BLUETOOTH_NAME "Kaeppa Head Unit V01"
+#define BLUETOOTH_NAME "Kaeppa Head Unit " VERSION
 
 
 // BCK == BCK
@@ -15,6 +17,14 @@
 #define BCK_PIN 4
 #define DATA_PIN 2
 #define WS_PIN 15
+
+#define EEPROM_SIZE 12
+#define BRIGHTNESS_FILE_ADDR 0
+#define BRIGHTNESS_JUMP_SIZE 20
+#define BRIGHTNESS_MAX 100
+#define BRIGHTNESS_MIN 10
+
+int brightness = 50;
 
 /* I2S pin config */
 i2s_pin_config_t my_pin_config = {
@@ -64,6 +74,29 @@ void sendTriggerReceivedOk(){
   myNex.writeNum("sig_ok_lab.bco", 32335);
 }
 
+void updateScreenBrightness(bool direction){
+  if(direction){
+    brightness += BRIGHTNESS_JUMP_SIZE;
+    if(brightness>=BRIGHTNESS_MAX){
+      brightness = BRIGHTNESS_MAX;
+    }
+  } else {
+    brightness -= BRIGHTNESS_JUMP_SIZE;
+    if(brightness<BRIGHTNESS_MIN){
+      brightness = BRIGHTNESS_MIN;
+    }
+  }
+
+  String br = "dim=" + String(brightness);
+  myNex.writeStr(br);
+
+  EEPROM.write(BRIGHTNESS_FILE_ADDR, brightness);
+  EEPROM.commit();
+
+  MonitorSerialPort.print("Screen brightness: ");
+  MonitorSerialPort.println(brightness);
+}
+
 // Previous button trigger
 void trigger0(){
   MonitorSerialPort.print("Previous Button triggered, new state: ");
@@ -100,6 +133,20 @@ void trigger3(){
     ESP.restart();
   }
   
+  sendTriggerReceivedOk();
+}
+
+// Brightness increase trigger
+void trigger4(){
+  MonitorSerialPort.print("Brightness increase triggered\n");
+  updateScreenBrightness(true);
+  sendTriggerReceivedOk();
+}
+
+// Brightness decrease trigger
+void trigger5(){
+  MonitorSerialPort.print("Brightness decrease triggered\n");
+  updateScreenBrightness(false);
   sendTriggerReceivedOk();
 }
 
@@ -245,10 +292,12 @@ void setup() {
 
   MonitorSerialPort.begin(9600, SERIAL_8N1, 3, 1);
 
+  EEPROM.begin(EEPROM_SIZE);
+
   myNex.begin(9600);
   pinMode(LED_BUILTIN, OUTPUT); // The built-in LED is initialized as an output 
   
-  MonitorSerialPort.print("Kaeppa Head Unit software startup, version 0.1\n");
+  MonitorSerialPort.println("Kaeppa Head Unit software startup, version " + String(VERSION));
   
   a2dp_sink.set_pin_config(my_pin_config);
   a2dp_sink.set_auto_reconnect(true, 10000);
@@ -263,8 +312,15 @@ void setup() {
   printLastBlMac();
   printCurrentBlMac();
 
-  // Goto startup screen
-  myNex.writeStr("page page1");
+  // Read & write screen brightness
+  int brightness_read = EEPROM.read(BRIGHTNESS_FILE_ADDR);
+  MonitorSerialPort.println("Read last brightness of " + String(brightness_read));  
+  if((brightness_read != 255) && (brightness_read >= BRIGHTNESS_MIN))
+  { 
+    brightness = brightness_read;
+  } 
+  String br = "dim=" + String(brightness);
+  myNex.writeStr(br);
 
 }
 
