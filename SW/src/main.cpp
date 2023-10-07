@@ -20,11 +20,11 @@
 
 #define EEPROM_SIZE 12
 #define BRIGHTNESS_FILE_ADDR 0
-#define BRIGHTNESS_JUMP_SIZE 20
-#define BRIGHTNESS_MAX 100
-#define BRIGHTNESS_MIN 10
 
-int brightness = 50;
+// Predefined brightness levels 0 to 100 %
+static int BRIGHTNESS_LEVELS[] = {1, 5, 10, 40, 60, 100};
+static int BRIGHTNESS_LEVELS_AMOUNT = sizeof(BRIGHTNESS_LEVELS) / sizeof(BRIGHTNESS_LEVELS[0]) -1 ;
+int brightness_ind = 2;
 
 /* I2S pin config */
 i2s_pin_config_t my_pin_config = {
@@ -76,25 +76,26 @@ void sendTriggerReceivedOk(){
 
 void updateScreenBrightness(bool direction){
   if(direction){
-    brightness += BRIGHTNESS_JUMP_SIZE;
-    if(brightness>=BRIGHTNESS_MAX){
-      brightness = BRIGHTNESS_MAX;
+    brightness_ind++;
+    if(brightness_ind > BRIGHTNESS_LEVELS_AMOUNT){
+      brightness_ind = BRIGHTNESS_LEVELS_AMOUNT;
     }
   } else {
-    brightness -= BRIGHTNESS_JUMP_SIZE;
-    if(brightness<BRIGHTNESS_MIN){
-      brightness = BRIGHTNESS_MIN;
+    brightness_ind--;
+    if(brightness_ind < 0){
+      brightness_ind = 0;
     }
   }
+
+  int brightness = BRIGHTNESS_LEVELS[brightness_ind];
 
   String br = "dim=" + String(brightness);
   myNex.writeStr(br);
 
-  EEPROM.write(BRIGHTNESS_FILE_ADDR, brightness);
+  EEPROM.write(BRIGHTNESS_FILE_ADDR, brightness_ind);
   EEPROM.commit();
 
-  MonitorSerialPort.print("Screen brightness: ");
-  MonitorSerialPort.println(brightness);
+  MonitorSerialPort.println("Screen brightness: " + String(brightness));
 }
 
 // Previous button trigger
@@ -313,15 +314,15 @@ void setup() {
   printCurrentBlMac();
 
   // Read & write screen brightness
-  int brightness_read = EEPROM.read(BRIGHTNESS_FILE_ADDR);
-  MonitorSerialPort.println("Read last brightness of " + String(brightness_read));  
-  if((brightness_read != 255) && (brightness_read >= BRIGHTNESS_MIN))
+  int brightness_ind_read = EEPROM.read(BRIGHTNESS_FILE_ADDR);
+  MonitorSerialPort.println("Read last brightness_ind " + String(brightness_ind_read));  
+  if((brightness_ind_read >= 0) && (brightness_ind_read <= BRIGHTNESS_LEVELS_AMOUNT))
   { 
-    brightness = brightness_read;
+    brightness_ind = brightness_ind_read;
+    int brightness = BRIGHTNESS_LEVELS[brightness_ind];
+    String br = "dim=" + String(brightness);
+    myNex.writeStr(br);
   } 
-  String br = "dim=" + String(brightness);
-  myNex.writeStr(br);
-
 }
 
 void loop() {
