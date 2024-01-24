@@ -6,8 +6,9 @@
 #include "BluetoothA2DPCommon.h"
 #include "version.h"
 
-#define BLUETOOTH_NAME "Kaeppa Head Unit " VERSION
+//#define HMI_UPDATE_MODE 1
 
+#define BLUETOOTH_NAME "Kaeppa Head Unit " VERSION
 
 // BCK == BCK
 // WS == LCK
@@ -213,12 +214,14 @@ void updateBluetoothLabel(){
       myNex.writeStr("bl_state_lab.txt", "CONNECTED");
       myNex.writeNum("bl_state_lab.bco", 1032);
       myNex.writeStr("bl_mac_lab.txt", " ");
+      delay(50);
       myNex.writeNum("bl_mac_lab.bco", 1032);
     } else {
       source_name_got = true;
       myNex.writeStr("bl_state_lab.txt", "CONNECTED");
       myNex.writeNum("bl_state_lab.bco", 1032);
       myNex.writeStr("bl_mac_lab.txt", String(bl_source) );
+      delay(50);
       myNex.writeNum("bl_mac_lab.bco", 1032);
     }
 
@@ -291,6 +294,13 @@ void runBootScreen(){
 
 void setup() {
 
+  #ifdef HMI_UPDATE_MODE
+    MonitorSerialPort.begin(9600, SERIAL_8N1, 3, 1);
+    HmiSerialPort.begin(9600, SERIAL_8N1);
+    MonitorSerialPort.println("Kaeppa Head Unit software startup in HMI UPDATE MODE, version " + String(VERSION));
+    return;
+  #endif
+
   MonitorSerialPort.begin(9600, SERIAL_8N1, 3, 1);
 
   EEPROM.begin(EEPROM_SIZE);
@@ -326,6 +336,21 @@ void setup() {
 }
 
 void loop() {
+
+  #ifdef HMI_UPDATE_MODE
+    while(true)
+    {
+      if( MonitorSerialPort.available())
+      {
+        HmiSerialPort.write(MonitorSerialPort.read());
+      }
+      if( HmiSerialPort.available())
+      {
+        MonitorSerialPort.write(HmiSerialPort.read());
+      }
+    }
+  #endif
+
   myNex.NextionListen();
   checkBluetoothState();
 }
